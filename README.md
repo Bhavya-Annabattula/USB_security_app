@@ -31,22 +31,22 @@ The application automates changing this value via `subprocess`-invoked `reg add`
 **Main Window**
 Displays a warning if the tool isn't running with Administrator privileges, since registry modification requires elevation.
 
-![Main Window](screenshots/main-window.png)
+![Main Window](main-window.png)
 
 **Authentication Required**
 Every USB state change is gated behind login. Failed attempts are logged and count toward the account lockout threshold.
 
-![Login Required](screenshots/login-required.png)
+![Login Required](login-required.png)
 
 **Error Handling**
 The tool correctly detects and reports when it lacks the privileges needed to modify the registry, rather than failing silently.
 
-![Action Failed](screenshots/action-failed.png)
+![Action Failed](action-failed.png)
 
 **Successful Operation**
 Confirmation shown after a USB state change completes successfully.
 
-![Success](screenshots/success.png)
+![Success](success.png)
 
 ## Tech Stack
 
