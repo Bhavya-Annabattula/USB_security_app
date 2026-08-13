@@ -59,27 +59,27 @@ If you're packaging with PyInstaller, make sure `users_data.json` lives next to 
 **Main Window**
 The main window with USB controls and the admin-only account creation entry point.
 
-![Main Window](screenshots/main-window.png)
+![Main Window](main-window.png)
 
 **Authentication Required**
 Every action — disabling/enabling USB or creating an account — is gated behind login. Failed attempts are logged and count toward the account lockout threshold.
 
-![Login Required](screenshots/login-required.png)
+![Login Required](login-required.png)
 
 **Create Account (Admin only)**
 Once logged in as `admin`, this form lets you register a new user without touching source code.
 
-![Create Account](screenshots/create-account.png)
+![Create Account](create-account.png)
 
 **Error Handling**
 The tool correctly detects and reports when it lacks the privileges needed to modify the registry, rather than failing silently.
 
-![Action Failed](screenshots/action-failed.png)
+![Action Failed](action-failed.png)
 
 **Successful Operation**
 Confirmation shown after a USB state change completes successfully.
 
-![Success](screenshots/success.png)
+![Success](success.png)
 
 ## Tech Stack
 
