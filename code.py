@@ -1,10 +1,9 @@
 import tkinter as tk
 import subprocess
-import hashlib
-import hmac
-import os
 import datetime
 import ctypes
+
+import user_store as store
 
 # ---------- Colors & Fonts ----------
 BG_DARK = "#1e1e2e"
@@ -21,35 +20,20 @@ FONT_BUTTON = ("Segoe UI", 11, "bold")
 MAX_ATTEMPTS = 3
 LOCKOUT_MINUTES = 15
 
-# ---------- Password hashing (PBKDF2-HMAC-SHA256, salted) ----------
-PBKDF2_ITERATIONS = 260_000
-
-def hash_password(password, salt=None):
-    if salt is None:
-        salt = os.urandom(16)  # new random salt per user
-    derived = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode(),
-        salt,
-        PBKDF2_ITERATIONS
-    )
-    return salt, derived
-
-def verify_password(password, salt, expected_hash):
-    _, derived = hash_password(password, salt)
-    return hmac.compare_digest(derived, expected_hash)
-
 # ---------- User store ----------
-# Each entry: username -> (salt, hash)
-users = {
-    "admin": hash_password("adminpass123"),
-    "bhavya": hash_password("mypassword456")
-}
+# Users now live in users_data.json (managed via user_store.py / manage_users.py)
+# instead of being hardcoded here. This dict is refreshed from disk on each
+# login attempt so changes made via the CLI script take effect without restart.
+users = store.load_users()
 
 # Tracks: username -> {"count": int, "last_failed": datetime}
 failed_attempts = {}
 
 def check_login(username, password):
+    # Reload from disk each time so users added via manage_users.py or the
+    # in-app "Create Account" flow are picked up immediately.
+    current_users = store.load_users()
+
     record = failed_attempts.get(username)
 
     # If locked, check whether the lockout window has expired
@@ -62,9 +46,9 @@ def check_login(username, password):
             # Lockout window expired, reset the counter
             failed_attempts[username] = {"count": 0, "last_failed": None}
 
-    if username in users:
-        salt, expected_hash = users[username]
-        if verify_password(password, salt, expected_hash):
+    if username in current_users:
+        salt, expected_hash = current_users[username]
+        if store.verify_password(password, salt, expected_hash):
             failed_attempts[username] = {"count": 0, "last_failed": None}
             return "success", None
 
@@ -121,6 +105,60 @@ def enable_usb(username):
         print(f"USB enable FAILED: {error}")
     return success, error
 
+# ---------- Create account popup (admin-only) ----------
+def open_create_account_popup(current_admin_username):
+    def submit():
+        new_username = new_username_entry.get().strip()
+        new_password = new_password_entry.get()
+        confirm_password = confirm_password_entry.get()
+
+        if not new_username:
+            create_result_label.config(text="Username cannot be empty.", fg=ACCENT_RED)
+            return
+        if new_password != confirm_password:
+            create_result_label.config(text="Passwords do not match.", fg=ACCENT_RED)
+            return
+
+        try:
+            store.add_user(new_username, new_password)
+        except store.UserError as e:
+            create_result_label.config(text=str(e), fg=ACCENT_RED)
+            return
+
+        log_event(f"USER CREATED: '{new_username}' by admin '{current_admin_username}'")
+        create_popup.destroy()
+        show_status_popup("Account Created", f"User '{new_username}' created successfully.", ACCENT_GREEN)
+
+    create_popup = tk.Toplevel(root)
+    create_popup.title("Create Account")
+    create_popup.geometry("300x300")
+    create_popup.configure(bg=BG_PANEL)
+    create_popup.iconphoto(False, logo_image)
+
+    tk.Label(create_popup, text="Create New Account", font=FONT_NORMAL,
+             bg=BG_PANEL, fg=TEXT_LIGHT).pack(pady=(15, 10))
+
+    tk.Label(create_popup, text="New Username:", bg=BG_PANEL, fg=TEXT_LIGHT).pack()
+    new_username_entry = tk.Entry(create_popup)
+    new_username_entry.pack(pady=5)
+
+    tk.Label(create_popup, text="New Password (min 8 chars):", bg=BG_PANEL, fg=TEXT_LIGHT).pack()
+    new_password_entry = tk.Entry(create_popup, show="*")
+    new_password_entry.pack(pady=5)
+
+    tk.Label(create_popup, text="Confirm Password:", bg=BG_PANEL, fg=TEXT_LIGHT).pack()
+    confirm_password_entry = tk.Entry(create_popup, show="*")
+    confirm_password_entry.pack(pady=5)
+
+    create_btn = tk.Button(create_popup, text="Create", font=FONT_BUTTON,
+                            bg=ACCENT_BLUE, fg="white", relief="flat",
+                            activebackground="#2980b9",
+                            command=submit)
+    create_btn.pack(pady=10, ipadx=10, ipady=3)
+
+    create_result_label = tk.Label(create_popup, text="", bg=BG_PANEL, fg=ACCENT_RED, wraplength=260)
+    create_result_label.pack()
+
 # ---------- Login popup ----------
 def ask_login(action):
     def attempt_login():
@@ -131,16 +169,26 @@ def ask_login(action):
         if result == "success":
             log_event(f"LOGIN SUCCESS: '{username}'")
             popup.destroy()
+
             if action == "disable":
                 success, error = disable_usb(username)
-            else:
+                if not success:
+                    show_status_popup("Action Failed", error, ACCENT_RED)
+                else:
+                    show_status_popup("Success", "USB Disabled successfully.", ACCENT_GREEN)
+            elif action == "enable":
                 success, error = enable_usb(username)
-
-            if not success:
-                show_status_popup("Action Failed", error, ACCENT_RED)
-            else:
-                label = "USB Disabled" if action == "disable" else "USB Enabled"
-                show_status_popup("Success", f"{label} successfully.", ACCENT_GREEN)
+                if not success:
+                    show_status_popup("Action Failed", error, ACCENT_RED)
+                else:
+                    show_status_popup("Success", "USB Enabled successfully.", ACCENT_GREEN)
+            elif action == "create_account":
+                # Only the 'admin' account may create new users.
+                if username == "admin":
+                    open_create_account_popup(username)
+                else:
+                    log_event(f"CREATE ACCOUNT DENIED: '{username}' is not admin")
+                    show_status_popup("Access Denied", "Only the admin account can create new users.", ACCENT_RED)
 
         elif result == "locked":
             result_label.config(
@@ -199,7 +247,7 @@ def add_hover(button, normal_color, hover_color):
 # ---------- Main window (created but hidden at first) ----------
 root = tk.Tk()
 root.title("USB Physical Security")
-root.geometry("420x400")
+root.geometry("420x460")
 root.configure(bg=BG_DARK)
 root.withdraw()  # hide main window until splash finishes
 
@@ -243,6 +291,15 @@ btn2 = tk.Button(root, text="Enable USB", font=FONT_BUTTON,
                   command=lambda: ask_login("enable"))
 canvas.create_window(200, 160, window=btn2, anchor="center")
 add_hover(btn2, ACCENT_GREEN, "#27ae60")
+
+# Admin-only entry point for account creation. The login popup itself
+# checks that the authenticated user is 'admin' before opening the form.
+btn3 = tk.Button(root, text="Create Account (Admin only)", font=FONT_BUTTON,
+                  bg=ACCENT_BLUE, fg="white", relief="flat",
+                  activebackground="#2980b9",
+                  command=lambda: ask_login("create_account"))
+btn3.pack(pady=(10, 20), ipadx=10, ipady=5)
+add_hover(btn3, ACCENT_BLUE, "#2980b9")
 
 # ---------- Splash screen ----------
 splash = tk.Toplevel()
