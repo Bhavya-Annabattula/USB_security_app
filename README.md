@@ -16,7 +16,7 @@ The tool allows an authenticated user to enable or disable USB storage access on
 - **Account Lockout** — Automatic 15-minute lockout after repeated failed login attempts, mitigating brute-force attempts
 - **Administrator Privilege Verification** — Detects and warns if the tool isn't running with the elevated permissions required for registry modification
 - **Audit Logging** — Every security-relevant event (login attempts, successes, failures, lockouts, USB state changes, account creation) is timestamped and logged to `usb_security.log`
-- **Self-Service-Free User Management** — New accounts can be added via an admin-only in-app flow or a CLI script, instead of editing source code
+- **Admin-Gated User Management** — New accounts can be created via an in-app flow (restricted to the `admin` account) or a CLI script, instead of editing source code
 - **Polished UI** — Custom splash screen, application icon, and a layered canvas-based interface built with Tkinter
 
 ## How It Works
@@ -36,8 +36,8 @@ original `admin` / `bhavya` accounts), not hardcoded in `code.py`. Passwords are
 never stored in plaintext — only PBKDF2-HMAC-SHA256 salted hashes.
 
 **In-app (GUI):** Click **"Create Account (Admin only)"** on the main window. You'll
-be prompted to log in — only the `admin` account is permitted to create new users.
-On success, fill in the new username/password in the popup that follows.
+be prompted to log in first — only the `admin` account is permitted to create new
+users. On success, a second popup opens where you set the new username and password.
 
 **Command line (`manage_users.py`):**
 
@@ -57,24 +57,29 @@ If you're packaging with PyInstaller, make sure `users_data.json` lives next to 
 ## Screenshots
 
 **Main Window**
-Displays a warning if the tool isn't running with Administrator privileges, since registry modification requires elevation.
+The main window with USB controls and the admin-only account creation entry point.
 
-![Main Window](main-window.png)
+![Main Window](screenshots/main-window.png)
 
 **Authentication Required**
-Every USB state change is gated behind login. Failed attempts are logged and count toward the account lockout threshold.
+Every action — disabling/enabling USB or creating an account — is gated behind login. Failed attempts are logged and count toward the account lockout threshold.
 
-![Login Required](login-required.png)
+![Login Required](screenshots/login-required.png)
+
+**Create Account (Admin only)**
+Once logged in as `admin`, this form lets you register a new user without touching source code.
+
+![Create Account](screenshots/create-account.png)
 
 **Error Handling**
 The tool correctly detects and reports when it lacks the privileges needed to modify the registry, rather than failing silently.
 
-![Action Failed](action-failed.png)
+![Action Failed](screenshots/action-failed.png)
 
 **Successful Operation**
 Confirmation shown after a USB state change completes successfully.
 
-![Success](success.png)
+![Success](screenshots/success.png)
 
 ## Tech Stack
 
@@ -102,6 +107,12 @@ python code.py
 
 ```bash
 python -m PyInstaller --onefile --windowed --icon=usb_security_logo.ico --name "USB Physical Security" code.py
+```
+
+Or, reuse the included `.spec` file:
+
+```bash
+python -m PyInstaller "USB Physical Security.spec"
 ```
 
 Ensure `usb_security_logo.png` and `logo_faded.png` are placed in the same directory as the generated `.exe`, as they are loaded at runtime. `users_data.json` will be created there automatically on first run.
