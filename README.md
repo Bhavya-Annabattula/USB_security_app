@@ -15,16 +15,44 @@ The tool allows an authenticated user to enable or disable USB storage access on
 - **Constant-Time Comparison** — Uses `hmac.compare_digest()` to prevent timing-based attacks during password verification
 - **Account Lockout** — Automatic 15-minute lockout after repeated failed login attempts, mitigating brute-force attempts
 - **Administrator Privilege Verification** — Detects and warns if the tool isn't running with the elevated permissions required for registry modification
-- **Audit Logging** — Every security-relevant event (login attempts, successes, failures, lockouts, USB state changes) is timestamped and logged to `usb_security.log`
+- **Audit Logging** — Every security-relevant event (login attempts, successes, failures, lockouts, USB state changes, account creation) is timestamped and logged to `usb_security.log`
+- **Self-Service-Free User Management** — New accounts can be added via an admin-only in-app flow or a CLI script, instead of editing source code
 - **Polished UI** — Custom splash screen, application icon, and a layered canvas-based interface built with Tkinter
 
 ## How It Works
 
 USB storage on Windows is governed by a single registry value:
+```
 HKLM\SYSTEM\CurrentControlSet\Services\USBSTOR
 Start = 3   →  Enabled
 Start = 4   →  Disabled
+```
 The application automates changing this value via `subprocess`-invoked `reg add` commands, gated behind an authentication layer so that only verified users can trigger the change.
+
+## User Management
+
+User accounts are stored in `users_data.json` (auto-created on first run with the
+original `admin` / `bhavya` accounts), not hardcoded in `code.py`. Passwords are
+never stored in plaintext — only PBKDF2-HMAC-SHA256 salted hashes.
+
+**In-app (GUI):** Click **"Create Account (Admin only)"** on the main window. You'll
+be prompted to log in — only the `admin` account is permitted to create new users.
+On success, fill in the new username/password in the popup that follows.
+
+**Command line (`manage_users.py`):**
+
+```bash
+python manage_users.py add <username>       # create a new user (prompts for password)
+python manage_users.py remove <username>    # delete a user (asks for confirmation)
+python manage_users.py passwd <username>    # reset a user's password
+python manage_users.py list                 # list all usernames
+```
+
+Both paths share the same hashing logic (`user_store.py`), so accounts created via
+either method work interchangeably for login.
+
+If you're packaging with PyInstaller, make sure `users_data.json` lives next to the
+`.exe` (or is copied there on first run) — it isn't bundled into the executable itself.
 
 ## Screenshots
 
@@ -76,13 +104,13 @@ python code.py
 python -m PyInstaller --onefile --windowed --icon=usb_security_logo.ico --name "USB Physical Security" code.py
 ```
 
-Ensure `usb_security_logo.png` and `logo_faded.png` are placed in the same directory as the generated `.exe`, as they are loaded at runtime.
+Ensure `usb_security_logo.png` and `logo_faded.png` are placed in the same directory as the generated `.exe`, as they are loaded at runtime. `users_data.json` will be created there automatically on first run.
 
 ## Known Limitations / Future Improvements
 
-- Credentials are currently defined in source rather than loaded from a secure external store or environment variables
 - Whitelisting of specific USB devices by Vendor ID/Product ID/Serial Number is a planned enhancement, allowing granular device-level control rather than an all-or-nothing toggle
 - Currently single-machine scoped; no centralized logging or alerting across multiple endpoints
+- `users_data.json` should be protected with filesystem permissions (or moved to a proper secrets store) in a production deployment — it stores salted hashes, not passwords, but is still sensitive
 
 ## Acknowledgment
 
