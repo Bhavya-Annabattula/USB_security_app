@@ -33,7 +33,8 @@ The application automates changing this value via `subprocess`-invoked `reg add`
 
 User accounts are stored in `users_data.json` (auto-created on first run with the
 original `admin` / `bhavya` accounts), not hardcoded in `code.py`. Passwords are
-never stored in plaintext — only PBKDF2-HMAC-SHA256 salted hashes.
+never stored in plaintext — only PBKDF2-HMAC-SHA256 salted hashes. 
+Only admin can create the users adding an additional level of security.
 
 **In-app (GUI):** Click **"Create Account (Admin only)"** on the main window. You'll
 be prompted to log in first — only the `admin` account is permitted to create new
